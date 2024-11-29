@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+from typing import Literal
 import requests as req
 import logging
 import boto3
@@ -26,16 +27,16 @@ class Zohodesk():
             data: dict,
             mode: str = "w",
     ) -> None:
-        dictObj: dict = {}
+        # dictObj: dict = {}
 
-        if mode == "a":
-            with open(f"{file_name}.json", "r", encoding='utf-8') as file:
-                dictObj = json.load(file)
+        # if mode == "a":
+        #     with open(f"{file_name}.json", "r", encoding='utf-8') as file:
+        #         dictObj = json.load(file)
             
-            dictObj.update(data)
-            mode = "w"
+        #     dictObj.update(data)
+        #     mode = "w"
         
-        data = dictObj if dictObj else data
+        # data = dictObj if dictObj else data
         
         with open(f"{file_name}.json", mode, encoding="utf-8") as file:
             file.write(json.dumps(data, indent=4, ensure_ascii=True))
@@ -63,17 +64,17 @@ class Zohodesk():
             raise Exception("The provided code is invalid. Generate a new one in the API Console Portal.")
 
         self.__write_json_file(
-            file_name="zoho_infos",
+            file_name="refresh_token",
             data={"refresh_token": json_response.get("refresh_token")}
         )
 
         logging.warning("DONE.")
 
     def __get_refresh_token(self) -> str:
-        if "zoho_infos.json" not in os.listdir(os.getcwd()):
+        if "refresh_token.json" not in os.listdir(os.getcwd()):
             self.__generate_refresh_token()
         
-        with open("zoho_infos.json", "r") as file:
+        with open("refresh_token.json", "r") as file:
             return json.load(file)['refresh_token']
     
     def __get_token(self) -> str:
@@ -92,10 +93,12 @@ class Zohodesk():
         return json.loads(resp.content)['access_token']
     
     def get_organizations(self) -> tuple[str, str]:
+        token = self.__get_token()
+
         response = req.get(
             url=f"{self.base_url}/organizations",
             headers={
-                "Authorization": f"Zoho-oauthtoken {self.__get_token()}"
+                "Authorization": f"Zoho-oauthtoken {token}"
             }
         )
 
@@ -155,7 +158,8 @@ class Zohodesk():
     
     def get_tickets(
             self,
-            orgId: str
+            orgId: str,
+            save: Literal['local', 'cloud'] = 'local'
     ) -> None:
         token = self.__get_token()
 
@@ -173,16 +177,19 @@ class Zohodesk():
 
                 final = num + 99 if len(data) == 100 else len(data) + num
 
-                self.__write_json_file(
-                    file_name=f"tickets_from_{num}_to_{final}",
-                    data=data
-                )
+                if save == "local":
+                    self.__write_json_file(
+                        file_name=f"tickets_from_{num}_to_{final}",
+                        data=data
+                    )
 
-                self.__write_json_file(
-                    file_name="zoho_infos",
-                    mode="a",
-                    data={"last_ticket": f"{final}"}
-                )
+                    self.__write_json_file(
+                        file_name="last_ticket",
+                        # mode="a",
+                        data={"last_ticket": f"{final}"}
+                    )
+                elif save == 'cloud':
+                    pass
             elif response.status_code == 204:
                 break
             else:
