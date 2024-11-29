@@ -1,12 +1,11 @@
 # Zoho Desk API extraction
 
 ## Authentication
-To use the Zoho Desk API you need a token.  
-To get your token you should access the [Zoho Desk API Console](https://api-console.zoho.com/).  
+The Zoho Desk API requires a token.  
+Visit [Zoho Desk API Console](https://api-console.zoho.com/) to set one.  
 
-After you're in, you'll see the page below.  
 
-## Get Started
+### Get Started
 ![zoho-api-console-initial-page](https://github.com/user-attachments/assets/805a3d3c-dc5d-4324-83f2-4e78bb1137fc)  
 
 Click on "Get Started" and choose the client type you want.  
@@ -27,7 +26,38 @@ Once you confirm, it will be shown your Client ID and Client Secret codes:
 
 Copy that information and save it in a `.env` file, at the same folder where `main.py` file is.
 
-Now you have to define the OAuth Scopes (read, write, create etc.).
+Now you have to define the OAuth Scopes (read, write, create, etc).  
+
+![image](https://github.com/user-attachments/assets/680e10c3-569a-4688-8675-589f0042785a)  
+For more information about scopes, see [this codumentation](https://desk.zoho.com/DeskAPIDocument#OauthTokens#OAuthScopes)  
+
+After this you will have to select the portal and the enviroment (prod or dev) and then click on "Create" to get the code.
+
+Now you can get the `access_token` and the `refresh_token`.  An example using Python:  
+```
+response = req.post(  
+    url="https://accounts.zoho.com/oauth/v2/token",
+    params={
+        "code": <your_code>,
+        "client_id": <your_client_id>,
+        "client_secret": <your_client_secret>,
+        "grant_type": "authorization_code"
+    }
+)
+```
+The response's value (if the request was succesfull):  
+```
+{
+    "access_token": "1000.39081b570de59e7469dbe...",
+    "refresh_token": "1000.4d2d0433036e8ca148f602b...",
+    "scope": "Desk.tickets.READ Desk.contacts.READ ...",
+    "api_domain": "https://www.zohoapis.com",
+    "token_type": "Bearer",
+    "expires_in": 3600
+}
+```
+You can use the `access_token` to make your requests, tha is useful for one hour  
+or you can request other token that does not expire (have in mind this is not the srcuriest option).
 
 ---
 
