@@ -1,14 +1,14 @@
-from dotenv import load_dotenv
 from typing import Literal, Optional
-from pathlib import Path
+from utils import write_json_file
 import requests as req
 import logging
-import boto3
+import pathlib
 import json
+import sys
 import os
 
 
-load_dotenv()
+logging.basicConfig(level=logging.INFO)
 
 
 class Zohodesk():
@@ -22,19 +22,9 @@ class Zohodesk():
         self.__client_secret: str = os.getenv("CLIENT_SECRET")
         self.code: str = code
 
-    def __write_json_file(
-            self,
-            path: str,
-            file_name: str,
-            data: dict,
-            # mode: str = "w",
-    ) -> None:
-        p = Path(f"{path}")
-        
-        p.mkdir(exist_ok=True)
-
-        with open(f"{p}/{file_name}.json", mode="w+", encoding="utf-8") as file:
-            json.dump(data, fp=file, indent=4, ensure_ascii=True)
+        if "win" in sys.platform:
+            from dotenv import load_dotenv
+            load_dotenv()
 
     def __generate_refresh_token(self) -> None:
         logging.warning("Generating refresh token...")
@@ -58,7 +48,7 @@ class Zohodesk():
         if "error" in f"{json_response}":
             raise Exception("The provided code is invalid. Generate a new one in the API Console Portal.")
 
-        self.__write_json_file(
+        write_json_file(
             file_name="refresh_token",
             data={"refresh_token": json_response.get("refresh_token")}
         )
@@ -104,59 +94,13 @@ class Zohodesk():
                 data['companyName'],
                 str(data['id'])
             )
-
-    def get_users(
-            self,
-            orgId: str
-    ):
-        response = req.get(
-            url=f"{self.base_url}/users",
-            headers={
-                "orgId": orgId,
-                "Authorization": f"Zoho-oauthtoken {self.__get_token()}"
-            }
-        )
-
-        if response.status_code == 200:
-            return json.loads(response.content)['data']
-    
-    def get_groups(
-            self,
-            orgId: str
-    ):
-        response = req.get(
-            url=f"{self.base_url}/groups",
-            headers={
-                "orgId": orgId,
-                "Authorization": f"Zoho-oauthtoken {self.__get_token()}"
-            }
-        )
-
-        if response.status_code == 200:
-            return json.loads(response.content)['data']
-    
-    def get_group_details(
-            self,
-            orgId: str,
-            groupId: str
-    ):
-        response = req.get(
-            url=f"{self.base_url}/groups/{groupId}",
-            headers={
-                "orgId": orgId,
-                "Authorization": f"Zoho-oauthtoken {self.__get_token()}"
-            }
-        )
-
-        if response.status_code == 200:
-            return json.loads(response.content)['data']
     
     def get_tickets(
             self,
             orgId: str,
             credentials: Optional[dict] = None,
             save: Literal['local', 'cloud'] = 'local',
-    ) -> None:
+    ) -> pathlib.Path:
         token = self.__get_token()
 
         for num in range(0, 500_000, 100):
@@ -174,16 +118,15 @@ class Zohodesk():
                 final = num + 99 if len(data) == 100 else len(data) + num
 
                 if save == "local":
-                    self.__write_json_file(
+                    write_json_file(
                         path="./tickets",
                         file_name=f"tickets_from_{num}_to_{final}",
                         data=data
                     )
 
-                    self.__write_json_file(
+                    write_json_file(
                         path="./",
                         file_name="last_ticket",
-                        # mode="a",
                         data={"last_ticket": f"{final}"}
                     )
                 elif save == 'cloud' and credentials is None:
@@ -194,65 +137,5 @@ class Zohodesk():
                 break
             else:
                 pass
-    
-    def get_ticket_metrics(
-            self,
-            orgId: str,
-            ticketId: str
-    ):
-        response = req.get(
-            url=f"{self.base_url}/tickets/{ticketId}/metrics",
-            headers={
-                "orgId": orgId,
-                "Authorization": f"Zoho-oauthtoken {self.__get_token()}"
-            }
-        )
-
-        if response.status_code == 200:
-            return json.loads(response.content)['data']
-    
-    def get_ticket_tags(
-            self,
-            orgId: str,
-            departmentId: str
-    ):
-        response = req.get(
-            url=f"{self.base_url}/ticketTags",
-            headers={
-                "orgId": orgId,
-                "departmentId": departmentId,
-                "Authorization": f"Zoho-oauthtoken {self.__get_token()}"
-            }
-        )
-
-        if response.status_code == 200:
-            return json.loads(response.content)['data']
-    
-    def get_departments(
-            self,
-            orgId: str
-    ):
-        response = req.get(
-            url=f"{self.base_url}/departments?isEnabled=true&chatStatus=AVAILABLE",
-            headers={
-                "orgId": orgId,
-                "Authorization": f"Zoho-oauthtoken {self.__get_token()}"
-            }
-        )
-
-        if response.status_code == 200:
-            return json.loads(response.content)['data']
-    
-    def upload_to_s3(
-            self,
-            bucket: str,
-            key: str,
-            object: str | None = None
-    ) -> None:
-        s3_client: boto3.client = boto3.client("s3")
-
-        s3_client.put_object(
-            Bucket=bucket,
-            Key=key,
-            Body=object
-        )
+        
+        return pathlib.Path("./tickets").absolute()
