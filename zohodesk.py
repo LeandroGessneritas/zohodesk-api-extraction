@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
-from typing import Literal
+from typing import Literal, Optional
+from pathlib import Path
 import requests as req
 import logging
 import boto3
@@ -23,23 +24,17 @@ class Zohodesk():
 
     def __write_json_file(
             self,
+            path: str,
             file_name: str,
             data: dict,
-            mode: str = "w",
+            # mode: str = "w",
     ) -> None:
-        # dictObj: dict = {}
+        p = Path(f"{path}")
+        
+        p.mkdir(exist_ok=True)
 
-        # if mode == "a":
-        #     with open(f"{file_name}.json", "r", encoding='utf-8') as file:
-        #         dictObj = json.load(file)
-            
-        #     dictObj.update(data)
-        #     mode = "w"
-        
-        # data = dictObj if dictObj else data
-        
-        with open(f"{file_name}.json", mode, encoding="utf-8") as file:
-            file.write(json.dumps(data, indent=4, ensure_ascii=True))
+        with open(f"{p}/{file_name}.json", mode="w+", encoding="utf-8") as file:
+            json.dump(data, fp=file, indent=4, ensure_ascii=True)
 
     def __generate_refresh_token(self) -> None:
         logging.warning("Generating refresh token...")
@@ -159,7 +154,8 @@ class Zohodesk():
     def get_tickets(
             self,
             orgId: str,
-            save: Literal['local', 'cloud'] = 'local'
+            credentials: Optional[dict] = None,
+            save: Literal['local', 'cloud'] = 'local',
     ) -> None:
         token = self.__get_token()
 
@@ -179,16 +175,20 @@ class Zohodesk():
 
                 if save == "local":
                     self.__write_json_file(
+                        path="./tickets",
                         file_name=f"tickets_from_{num}_to_{final}",
                         data=data
                     )
 
                     self.__write_json_file(
+                        path="./",
                         file_name="last_ticket",
                         # mode="a",
                         data={"last_ticket": f"{final}"}
                     )
-                elif save == 'cloud':
+                elif save == 'cloud' and credentials is None:
+                    raise ValueError("Credentials are required when saving to cloud.")
+                else:
                     pass
             elif response.status_code == 204:
                 break
@@ -256,13 +256,3 @@ class Zohodesk():
             Key=key,
             Body=object
         )
-
-
-if __name__ == "__main__":
-    code = ""
-
-    zoho = Zohodesk(code)
-
-    org_name, org_id = zoho.get_organizations()
-
-    zoho.get_tickets(orgId=org_id)
