@@ -1,5 +1,5 @@
 # import psycopg2.extras as extras
-from typing import Literal
+# from typing import Literal
 # import pandas as pd
 # import psycopg2
 import pathlib
@@ -7,7 +7,8 @@ import logging
 import boto3
 import json
 import sys
-# import os
+import re
+import os
 
 if "win" in sys.platform:
     from dotenv import load_dotenv
@@ -24,9 +25,39 @@ def write_json_file(
     p.mkdir(exist_ok=True)
 
     with open(f"{p}/{file_name}.json", mode="w+", encoding="utf-8") as file:
-        json.dump(data, fp=file, indent=4, ensure_ascii=True)
+        json.dump(data, fp=file, indent=4)
 
         logging.info(f"File {p}/{file_name}.json saved!")
+
+
+def __read_json_object(path: str | pathlib.Path):
+    obj = []
+
+    with open(path, "r", encoding='latin-1') as json_file:
+        obj = json.load(json_file)
+    
+    return obj
+
+
+def __flat_json_object(obj: list | dict):
+    json_file_flat = []
+
+    for doc in obj:
+        aux_dict = {}
+
+        for field in doc:
+            if isinstance(doc[field], tuple):
+                pass
+            elif isinstance(doc[field], list):
+                pass
+            elif isinstance(doc[field], dict):
+                aux_dict.update(__flat_dict(doc[field], field))
+            else:
+                aux_dict[field] = doc[field]
+        
+        json_file_flat.append(aux_dict)
+    
+    return json_file_flat
 
 
 # def get_file(
@@ -54,47 +85,68 @@ def __flat_dict(d: dict, field_name: str) -> dict:
     return d_out
 
 
-def normalize_file(
-        file: list | dict,
-        level: Literal['folder', 'file'] = 'folder',
-        path: str = './',
-) -> list | dict:
-    if level == 'folder':
+def normalize_json_file(
+        obj: list | dict | str | pathlib.Path
+) -> pathlib.Path:
+    if isinstance(obj, list):
         pass
+    elif isinstance(obj, dict):
+        pass
+    elif isinstance(obj, str):
+        pass
+    elif isinstance(obj, pathlib.Path):
+        if obj.is_dir():
+            for entry in sorted(obj.rglob("*.json")):
+                doc = __read_json_object(entry)
+
+                flat_doc = __flat_json_object(doc)
+
+                save_path = pathlib.Path(
+                    f'{"/".join(obj.parts)}_flattened/'.replace("//", "/")
+                )
+
+                write_json_file(
+                    path=save_path,
+                    file_name=entry.stem,
+                    data=flat_doc
+                )
+        elif obj.is_file():
+            pass
     else:
-        pass
-
-    json_file_flat = []
-
-    for doc in file:
-        aux_dict = {}
-
-        for field in doc:
-            if isinstance(doc[field], tuple):
-                pass
-            elif isinstance(doc[field], list):
-                pass
-            elif isinstance(doc[field], dict):
-                aux_dict.update(__flat_dict(doc[field], field))
-            else:
-                aux_dict[field] = doc[field]
-        
-        json_file_flat.append(aux_dict)
+        raise TypeError("Type not acceptable!")
     
-    return json_file_flat
+    return pathlib.Path(save_path)
+
 
 def upload_to_s3(
+        filename: str,
         bucket: str,
-        key: str,
-        object: str | None = None
+        key: str
 ) -> None:
-    s3_client: boto3.client = boto3.client("s3")
-
-    s3_client.put_object(
-        Bucket=bucket,
-        Key=key,
-        Body=object
+    s3_client = boto3.client(
+        "s3",
+        # region_name=os.getenv('AWS_REGION'),
+        aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+        aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
+        aws_session_token=os.getenv('AWS_SESSION_TOKEN')
+        # endpoint_url=os.getenv('AWS_ENDPOINT')
     )
+
+    s3_client.upload_file(
+        Filename=filename,
+        Bucket=bucket,
+        Key=key
+    )
+
+
+def __get_int(n):
+    return int(re.search(r'\d+', n.stem).group())
+
+
+def list_and_sort_path(path: pathlib.Path) -> list:
+    sorted_list = sorted(path.rglob("*.json"), key=__get_int)
+
+    return sorted_list
 
 
 # def execute_values(conn, df, table: str):

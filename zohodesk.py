@@ -11,7 +11,7 @@ import os
 logging.basicConfig(level=logging.INFO)
 
 
-class Zohodesk():
+class Zohodesk:
     def __init__(
             self,
             code: str | None = None
@@ -100,10 +100,11 @@ class Zohodesk():
             orgId: str,
             credentials: Optional[dict] = None,
             save: Literal['local', 'cloud'] = 'local',
+            start: int = 0,
     ) -> pathlib.Path:
         token = self.__get_token()
 
-        for num in range(0, 500_000, 100):
+        for num in range(start, start + 500_000, 100):
             response = req.get(
                 url=f"{self.base_url}/tickets?from={num}&limit=100&sortBy=createdTime",
                 headers={
