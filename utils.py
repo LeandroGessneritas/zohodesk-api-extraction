@@ -24,7 +24,7 @@ def write_json_file(
     
     p.mkdir(exist_ok=True)
 
-    with open(f"{p}/{file_name}.json", mode="w+", encoding="utf-8") as file:
+    with open(f"{p}/{file_name}.json", mode="w+", encoding="latin-1") as file:
         json.dump(data, fp=file, indent=4)
 
         logging.info(f"File {p}/{file_name}.json saved!")
@@ -60,22 +60,6 @@ def __flat_json_object(obj: list | dict):
     return json_file_flat
 
 
-# def get_file(
-#         file: str,
-# ) -> None | list | dict:
-#     if level == 'folder':
-#         for entry in pathlib.Path(path).iterdir():
-#             if entry.is_file() \
-#                     and entry.suffix == ".json" \
-#                     and file in entry.name.split('.')[0]:
-#                 doc = []
-
-#                 with open(entry, "r", encoding='latin-1') as json_file:
-#                     doc = json.load(json_file)
-    
-#     return doc
-
-
 def __flat_dict(d: dict, field_name: str) -> dict:
     d_out = {}
 
@@ -96,7 +80,9 @@ def normalize_json_file(
         pass
     elif isinstance(obj, pathlib.Path):
         if obj.is_dir():
-            for entry in sorted(obj.rglob("*.json")):
+            path = list_and_sort_path(obj)
+
+            for entry in path:
                 doc = __read_json_object(entry)
 
                 flat_doc = __flat_json_object(doc)

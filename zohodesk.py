@@ -1,11 +1,13 @@
 from typing import Literal, Optional
 from utils import write_json_file
+from datetime import datetime
 import requests as req
 import logging
 import pathlib
 import json
 import sys
 import os
+import re
 
 
 logging.basicConfig(level=logging.INFO)
@@ -21,6 +23,8 @@ class Zohodesk:
         self.__client_id: str = os.getenv("CLIENT_ID")
         self.__client_secret: str = os.getenv("CLIENT_SECRET")
         self.code: str = code
+        # TODO: increase pattern for date "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+        self.__date_pattern = r"2[0-9]{3}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{3}Z"
 
         if "win" in sys.platform:
             from dotenv import load_dotenv
@@ -99,14 +103,39 @@ class Zohodesk:
             self,
             orgId: str,
             credentials: Optional[dict] = None,
-            save: Literal['local', 'cloud'] = 'local',
+            save_type: Literal['local', 'cloud'] = 'local',
+            save_path: Optional[str] = './tickets',
+            sort_by: Literal['createdTime', 'modifiedTime'] = 'modifiedTime',
+            order: Literal['ascending', 'descending'] = 'ascending',
+            only_updated: bool = False,
+            start_date: Optional[str] = "",
             start: int = 0,
     ) -> pathlib.Path:
         token = self.__get_token()
 
+        sign: str = "-" if order == "descending" else ""
+
+        if only_updated:
+            valid_date = re.match(self.__date_pattern, start_date)
+
+            if start_date == "" or bool(valid_date) is False:
+                raise ValueError(
+                    "Valid date is required to get only updated tickets.Expected format is yyyy-MM-dd'T'HH:mm:ss.SSS'Z' wihtout the quotes."
+                )
+            
+            today = datetime.today()
+            full_last_hour_today = f"{today.year}-{today.month:0>2}-{today.day:0>2}T23:59:59.999Z"
+
+            url: str = f"{self.base_url}/tickets/search?modifiedTimeRange={start_date},{full_last_hour_today}&"
+
+            sort_by = "modifiedTime"
+        else:
+            # TODO
+            url: str = f"{self.base_url}/tickets?"
+
         for num in range(start, start + 500_000, 100):
             response = req.get(
-                url=f"{self.base_url}/tickets?from={num}&limit=100&sortBy=createdTime",
+                url=f"{url}from={num}&limit=100&sortBy={sign}{sort_by}",
                 headers={
                     "orgId": orgId,
                     "Authorization": f"Zoho-oauthtoken {token}"
@@ -118,9 +147,12 @@ class Zohodesk:
 
                 final = num + 99 if len(data) == 100 else len(data) + num
 
-                if save == "local":
+                if save_type == "local":
+                    if save_path is None or save_path == "":
+                        raise ValueError("Path is required for local storing.")
+
                     write_json_file(
-                        path="./tickets",
+                        path=save_path,
                         file_name=f"tickets_from_{num}_to_{final}",
                         data=data
                     )
@@ -130,7 +162,7 @@ class Zohodesk:
                         file_name="last_ticket",
                         data={"last_ticket": f"{final}"}
                     )
-                elif save == 'cloud' and credentials is None:
+                elif save_type == 'cloud' and credentials is None:
                     raise ValueError("Credentials are required when saving to cloud.")
                 else:
                     pass
