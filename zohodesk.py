@@ -1,6 +1,6 @@
+from datetime import datetime, timezone
 from typing import Literal, Optional
 from utils import write_json_file
-from datetime import datetime
 import requests as req
 import logging
 import pathlib
@@ -110,6 +110,7 @@ class Zohodesk:
             only_updated: bool = False,
             start_date: Optional[str] = "",
             start: int = 0,
+            keep_counting: bool = False,
     ) -> pathlib.Path:
         token = self.__get_token()
 
@@ -120,7 +121,8 @@ class Zohodesk:
 
             if start_date == "" or bool(valid_date) is False:
                 raise ValueError(
-                    "Valid date is required to get only updated tickets.Expected format is yyyy-MM-dd'T'HH:mm:ss.SSS'Z' wihtout the quotes."
+                    """Valid date is required to get only updated tickets.
+                    Expected format is yyyy-MM-dd'T'HH:mm:ss.SSS'Z' wihtout the quotes."""
                 )
             
             today = datetime.today()
@@ -151,11 +153,14 @@ class Zohodesk:
                     if save_path is None or save_path == "":
                         raise ValueError("Path is required for local storing.")
 
-                    write_json_file(
-                        path=save_path,
-                        file_name=f"tickets_from_{num}_to_{final}",
-                        data=data
-                    )
+                    if keep_counting:
+                        pass
+                    else:
+                        write_json_file(
+                            path=save_path,
+                            file_name=f"tickets_from_{num}_to_{final}",
+                            data=data
+                        )
 
                     write_json_file(
                         path="./",

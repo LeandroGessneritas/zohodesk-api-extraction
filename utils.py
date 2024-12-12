@@ -135,6 +135,15 @@ def list_and_sort_path(path: pathlib.Path) -> list:
     return sorted_list
 
 
+def is_empty_folder(
+        path: str | pathlib.Path
+) -> bool:
+    if isinstance(path, str):
+        return not any(pathlib.Path(path).iterdir())
+    elif isinstance(path, pathlib.Path):
+        return not any(path.iterdir())
+
+
 # def execute_values(conn, df, table: str):
 #     tuples = [tuple(x) for x in df.to_numpy()] 
   
