@@ -1,6 +1,7 @@
-from datetime import datetime, timezone
 from typing import Literal, Optional
+from dataclasses import dataclass
 from utils import write_json_file
+from datetime import datetime
 import requests as req
 import logging
 import pathlib
@@ -11,6 +12,12 @@ import re
 
 
 logging.basicConfig(level=logging.INFO)
+
+
+@dataclass
+class Organizations:
+    companyName: str
+    companyId: str
 
 
 class Zohodesk:
@@ -81,7 +88,7 @@ class Zohodesk:
 
         return json.loads(resp.content)['access_token']
     
-    def get_organizations(self) -> tuple[str, str]:
+    def get_organizations(self) -> Organizations:
         token = self.__get_token()
 
         response = req.get(
@@ -94,9 +101,9 @@ class Zohodesk:
         if response.status_code == 200:
             data = json.loads(response.content)['data'][0]
 
-            return (
-                data['companyName'],
-                str(data['id'])
+            return Organizations(
+                companyName=data['companyName'],
+                companyId=str(data['id'])
             )
     
     def get_tickets(
