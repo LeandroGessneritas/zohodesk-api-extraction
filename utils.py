@@ -1,7 +1,3 @@
-# import psycopg2.extras as extras
-# from typing import Literal
-# import pandas as pd
-# import psycopg2
 import pathlib
 import logging
 import boto3
@@ -16,9 +12,10 @@ if "win" in sys.platform:
 
 
 def write_json_file(
-        path: str,
         file_name: str,
         data: dict,
+        path: str = pathlib.Path.cwd(),
+        log_event: bool = True
 ) -> None:
     p = pathlib.Path(f"{path}")
     
@@ -27,10 +24,11 @@ def write_json_file(
     with open(f"{p}/{file_name}.json", mode="w+", encoding="latin-1") as file:
         json.dump(data, fp=file, indent=4)
 
-        logging.info(f"File {p}/{file_name}.json saved!")
+        if log_event:
+            logging.info(f"File {p}/{file_name}.json saved!")
 
 
-def __read_json_object(path: str | pathlib.Path):
+def read_json_file(path: str | pathlib.Path):
     obj = []
 
     with open(path, "r", encoding='latin-1') as json_file:
@@ -83,7 +81,7 @@ def normalize_json_file(
             path = list_and_sort_path(obj)
 
             for entry in path:
-                doc = __read_json_object(entry)
+                doc = read_json_file(entry)
 
                 flat_doc = __flat_json_object(doc)
 
@@ -111,11 +109,9 @@ def upload_to_s3(
 ) -> None:
     s3_client = boto3.client(
         "s3",
-        # region_name=os.getenv('AWS_REGION'),
         aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
         aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
         aws_session_token=os.getenv('AWS_SESSION_TOKEN')
-        # endpoint_url=os.getenv('AWS_ENDPOINT')
     )
 
     s3_client.upload_file(

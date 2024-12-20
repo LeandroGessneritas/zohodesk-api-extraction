@@ -1,7 +1,7 @@
-from typing import Literal, Optional
+from utils import write_json_file, read_json_file, upload_to_s3
 from dataclasses import dataclass
-from utils import write_json_file
 from datetime import datetime
+from typing import Optional
 import requests as req
 import logging
 import pathlib
@@ -109,42 +109,44 @@ class Zohodesk:
     def get_tickets(
             self,
             orgId: str,
-            credentials: Optional[dict] = None,
-            save_type: Literal['local', 'cloud'] = 'local',
             save_path: Optional[str] = './tickets',
-            sort_by: Literal['createdTime', 'modifiedTime'] = 'modifiedTime',
-            order: Literal['ascending', 'descending'] = 'ascending',
-            only_updated: bool = False,
-            start_date: Optional[str] = "",
-            start: int = 0,
-            keep_counting: bool = False,
+            start_date: str = "",
+            upload: bool = False,
     ) -> pathlib.Path:
+        # getting the token
         token = self.__get_token()
-
-        sign: str = "-" if order == "descending" else ""
-
-        if only_updated:
+        
+        if start_date != "":
+            # validating the date passed as parameter
             valid_date = re.match(self.__date_pattern, start_date)
 
-            if start_date == "" or bool(valid_date) is False:
+            if bool(valid_date) is False:
                 raise ValueError(
                     """Valid date is required to get only updated tickets.
                     Expected format is yyyy-MM-dd'T'HH:mm:ss.SSS'Z' wihtout the quotes."""
                 )
-            
-            today = datetime.today()
-            full_last_hour_today = f"{today.year}-{today.month:0>2}-{today.day:0>2}T23:59:59.999Z"
+        
+        # veryfing if already exist downloaded tickets
+        if pathlib.Path(save_path).is_dir():
+            # if len(list(pathlib.Path(save_path).iterdir())) > 0:
+            file: dict = read_json_file(path=pathlib.Path("last_ticket.json").absolute())
 
-            url: str = f"{self.base_url}/tickets/search?modifiedTimeRange={start_date},{full_last_hour_today}&"
-
-            sort_by = "modifiedTime"
+            start_date = file.get("last_ticket_downloaded_date")
         else:
-            # TODO
-            url: str = f"{self.base_url}/tickets?"
+            start_date = "2018-01-01T00:00:00.000Z"
+        
+        today = datetime.today()
+        full_last_hour_today = f"{today.year}-{today.month:0>2}-{today.day:0>2}T23:59:59.999Z"
 
-        for num in range(start, start + 500_000, 100):
+        endpoint: str = "tickets"
+        parameter: str = f"search?modifiedTimeRange={start_date},{full_last_hour_today}"
+        limit: int = 100
+        sort_by: str = "modifiedTime"
+        start: int = 0
+
+        for num in range(start, start + 5_000, 100):
             response = req.get(
-                url=f"{url}from={num}&limit=100&sortBy={sign}{sort_by}",
+                url=f"{self.base_url}/{endpoint}/{parameter}&from={num}&limit={limit}&sortBy={sort_by}",
                 headers={
                     "orgId": orgId,
                     "Authorization": f"Zoho-oauthtoken {token}"
@@ -154,33 +156,43 @@ class Zohodesk:
             if response.status_code == 200:
                 data = json.loads(response.content)['data']
 
-                final = num + 99 if len(data) == 100 else len(data) + num
+                init = data[0]["modifiedTime"]
+                final = data[-1]["modifiedTime"]
 
-                if save_type == "local":
-                    if save_path is None or save_path == "":
-                        raise ValueError("Path is required for local storing.")
+                write_json_file(
+                    path=save_path,
+                    file_name=f"tickets_from_{init}_to_{final}",
+                    data=data
+                )
 
-                    if keep_counting:
-                        pass
-                    else:
-                        write_json_file(
-                            path=save_path,
-                            file_name=f"tickets_from_{num}_to_{final}",
-                            data=data
-                        )
-
-                    write_json_file(
-                        path="./",
-                        file_name="last_ticket",
-                        data={"last_ticket": f"{final}"}
-                    )
-                elif save_type == 'cloud' and credentials is None:
-                    raise ValueError("Credentials are required when saving to cloud.")
-                else:
-                    pass
+                write_json_file(
+                    file_name="last_ticket",
+                    data={"last_ticket_downloaded_date": f"{final}"},
+                    log_event=False
+                )
             elif response.status_code == 204:
                 break
             else:
                 pass
         
-        return pathlib.Path("./tickets").absolute()
+        saved_tickets_path = pathlib.Path("./tickets").absolute()
+
+        if upload:
+            self.__send_data_to_s3(saved_tickets_path)
+        else:
+            return pathlib.Path("./tickets").absolute()
+    
+    def __send_data_to_s3(self, path: pathlib.Path) -> None:
+        for file in path.iterdir():
+            upload_to_s3(
+                filename=file,
+                bucket=os.getenv("BUCKET"),
+                key=f"{os.getenv("KEY")}/{file.name}"
+            )
+
+            pathlib.Path(file).unlink()
+        
+        self.get_tickets(
+            orgId=self.get_organizations().companyId,
+            upload=True
+        )
