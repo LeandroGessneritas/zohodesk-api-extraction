@@ -11,3 +11,10 @@ To generate a token which does not expire make another request, like [here](http
 (have in mind this is not the securiest option).  
 
 For more information, access the [Zoho Desk API Documentation](https://desk.zoho.com/DeskAPIDocument)
+
+## Organizations
+The organization id is required to get another information, via API.\
+To get this id, call the `get_organizations` method, available in Zohodesk class (located in `zohodesk.py` file)
+
+## Tickets
+Using the organization id, invoke the method `get_tickets`.\
