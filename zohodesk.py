@@ -187,7 +187,7 @@ class Zohodesk:
             upload_to_s3(
                 filename=file,
                 bucket=os.getenv("BUCKET"),
-                key=f"{os.getenv("KEY")}/{file.name}"
+                key=f"{os.getenv('KEY')}/{file.name}"
             )
 
             pathlib.Path(file).unlink()
