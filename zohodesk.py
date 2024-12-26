@@ -128,10 +128,12 @@ class Zohodesk:
         
         # veryfing if already exist downloaded tickets
         if pathlib.Path(save_path).is_dir():
-            # if len(list(pathlib.Path(save_path).iterdir())) > 0:
-            file: dict = read_json_file(path=pathlib.Path("last_ticket.json").absolute())
+            try:
+                file: dict = read_json_file(path=pathlib.Path("last_ticket.json").absolute())
 
-            start_date = file.get("last_ticket_downloaded_date")
+                start_date = file.get("last_ticket_downloaded_date")
+            except FileNotFoundError:
+                start_date = "2018-01-01T00:00:00.000Z"
         else:
             start_date = "2018-01-01T00:00:00.000Z"
         
@@ -156,12 +158,15 @@ class Zohodesk:
             if response.status_code == 200:
                 data = json.loads(response.content)['data']
 
-                init = data[0]["modifiedTime"]
-                final = data[-1]["modifiedTime"]
+                init: str = data[0]["modifiedTime"]
+                final: str = data[-1]["modifiedTime"]
+                
+                init_replaces: str = init.replace(':', '-').replace('T', '_').replace('.000Z', '')
+                final_replaces: str = final.replace(':', '-').replace('T', '_').replace('.000Z', '')
 
                 write_json_file(
                     path=save_path,
-                    file_name=f"tickets_from_{init}_to_{final}",
+                    file_name=f"tickets_from_{init_replaces}_to_{final_replaces}",
                     data=data
                 )
 

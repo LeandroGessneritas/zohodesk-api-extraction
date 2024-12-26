@@ -138,34 +138,3 @@ def is_empty_folder(
         return not any(pathlib.Path(path).iterdir())
     elif isinstance(path, pathlib.Path):
         return not any(path.iterdir())
-
-
-# def execute_values(conn, df, table: str):
-#     tuples = [tuple(x) for x in df.to_numpy()] 
-  
-#     cols = ','.join(list(df.columns)) 
-#     # SQL query to execute 
-#     query = "INSERT INTO %s(%s) VALUES %%s" % (table, cols) 
-#     cursor = conn.cursor() 
-
-#     try: 
-#         extras.execute_values(cursor, query, tuples) 
-#         conn.commit() 
-#     except (Exception, psycopg2.DatabaseError) as error: 
-#         print("Error: %s" % error) 
-#         conn.rollback() 
-#         cursor.close() 
-#         return 1
-    
-#     print("the dataframe is inserted") 
-#     cursor.close()
-
-
-# if __name__ == "__main__":
-    # conn = psycopg2.connect( 
-    #     database=os.getenv("DATABASE"),
-    #     user=os.getenv("USER"),
-    #     password=os.getenv("PASSWORD"),
-    #     host=os.getenv("HOST"),
-    #     port=os.getenv("PORT"),
-    # )
