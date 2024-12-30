@@ -125,17 +125,17 @@ class Zohodesk:
                     """Valid date is required to get only updated tickets.
                     Expected format is yyyy-MM-dd'T'HH:mm:ss.SSS'Z' wihtout the quotes."""
                 )
-        
-        # veryfing if already exist downloaded tickets
-        if pathlib.Path(save_path).is_dir():
-            try:
-                file: dict = read_json_file(path=pathlib.Path("last_ticket.json").absolute())
-
-                start_date = file.get("last_ticket_downloaded_date")
-            except FileNotFoundError:
-                start_date = "2018-01-01T00:00:00.000Z"
         else:
-            start_date = "2018-01-01T00:00:00.000Z"
+            # veryfing if already exist downloaded tickets
+            if pathlib.Path(save_path).is_dir():
+                try:
+                    file: dict = read_json_file(path=pathlib.Path("last_ticket.json").absolute())
+
+                    start_date = file.get("last_ticket_downloaded_date")
+                except FileNotFoundError:
+                    start_date = "2018-01-01T00:00:00.000Z"
+            else:
+                start_date = "2018-01-01T00:00:00.000Z"
         
         today = datetime.today()
         full_last_hour_today = f"{today.year}-{today.month:0>2}-{today.day:0>2}T23:59:59.999Z"
