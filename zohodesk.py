@@ -127,14 +127,11 @@ class Zohodesk:
                 )
         else:
             # veryfing if already exist downloaded tickets
-            if pathlib.Path(save_path).is_dir():
-                try:
-                    file: dict = read_json_file(path=pathlib.Path("last_ticket.json").absolute())
+            try:
+                file: dict = read_json_file(path=pathlib.Path("last_ticket.json").absolute())
 
-                    start_date = file.get("last_ticket_downloaded_date")
-                except FileNotFoundError:
-                    start_date = "2018-01-01T00:00:00.000Z"
-            else:
+                start_date = file.get("last_ticket_downloaded_date")
+            except FileNotFoundError:
                 start_date = "2018-01-01T00:00:00.000Z"
         
         today = datetime.today()
