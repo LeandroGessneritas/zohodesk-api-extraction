@@ -198,3 +198,33 @@ class Zohodesk:
             orgId=self.get_organizations().companyId,
             upload=True
         )
+    
+    def get_departments(self) -> None:
+        token = self.__get_token()
+
+        response = req.get(
+            url=f"{self.base_url}/departments",
+            headers={
+                "Authorization": f"Zoho-oauthtoken {token}"
+            }
+        )
+
+        if response.status_code == 200:
+            data = json.loads(response.content)['data']
+
+            write_json_file("departamentos", data=data, path="./")
+
+    def get_products(self) -> None:
+        token = self.__get_token()
+
+        response = req.get(
+            url=f"{self.base_url}/products",
+            headers={
+                "Authorization": f"Zoho-oauthtoken {token}"
+            }
+        )
+
+        if response.status_code == 200:
+            data = json.loads(response.content)['data']
+
+            write_json_file("produtos", data=data, path="./")
