@@ -228,3 +228,33 @@ class Zohodesk:
             data = json.loads(response.content)['data']
 
             write_json_file("produtos", data=data, path="./")
+
+    def get_tasks(self) -> None:
+        token = self.__get_token()
+
+        response = req.get(
+            url=f"{self.base_url}/tasks?limit=100",
+            headers={
+                "Authorization": f"Zoho-oauthtoken {token}"
+            }
+        )
+
+        if response.status_code == 200:
+            data = json.loads(response.content)['data']
+
+            write_json_file("tarefas", data=data, path="./")
+    
+    def get_contacts(self) -> None:
+        token = self.__get_token()
+
+        response = req.get(
+            url=f"{self.base_url}/contacts?limit=100",
+            headers={
+                "Authorization": f"Zoho-oauthtoken {token}"
+            }
+        )
+
+        if response.status_code == 200:
+            data = json.loads(response.content)['data']
+
+            write_json_file("contatos", data=data, path="./")
