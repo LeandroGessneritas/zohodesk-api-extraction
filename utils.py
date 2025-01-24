@@ -101,12 +101,16 @@ def normalize_json_file(
     
     return pathlib.Path(save_path)
 
-
-def upload_to_s3(
-        filename: str,
-        bucket: str,
-        key: str
+def send_data_to_s3(
+        path: pathlib.Path,
+        domain: str
 ) -> None:
+    calls = {
+        "tickets": "self.get_tickets()",
+        "contacts": "self.get_contacts()",
+        "tasks": "self.get_contacts()",
+    }
+
     s3_client = boto3.client(
         "s3",
         aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
@@ -114,11 +118,20 @@ def upload_to_s3(
         aws_session_token=os.getenv('AWS_SESSION_TOKEN')
     )
 
-    s3_client.upload_file(
-        Filename=filename,
-        Bucket=bucket,
-        Key=key
-    )
+    if path.is_dir():
+        for file in path.iterdir():
+            s3_client.upload_file(
+                Filename=file,
+                Bucket="501464632998-prod-landing-corporate",
+                Key=f"zohodesk/{domain}/{file.name}"
+            )
+
+            pathlib.Path(file).unlink()
+    else:
+        # TODO: 
+        pass
+    
+    return calls.get(domain)
 
 
 def __get_int(n):

@@ -1,8 +1,13 @@
-from utils import write_json_file, read_json_file, upload_to_s3
+from utils import (
+    write_json_file, 
+    read_json_file, 
+    send_data_to_s3
+)
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 import requests as req
+from time import sleep
 import logging
 import pathlib
 import json
@@ -41,7 +46,7 @@ class Zohodesk:
     def __generate_refresh_token(self) -> None:
         logging.warning("Generating refresh token...")
 
-        if self.code is None:
+        if self.code is None or self.code == "":
             raise Exception("Code is needed to get refresh token")
         
         # it must get the code parameter in api console before running
@@ -87,7 +92,14 @@ class Zohodesk:
             }
         )
 
-        return json.loads(resp.content)['access_token']
+        try:
+            return json.loads(resp.content)['access_token']
+        except KeyError:
+            # if 'error' in list(json.loads(resp.content).keys()):
+            logging.warning("Waiting 30 seconds to do a request to another endpoint...")
+            sleep(30)
+            logging.warning("Trying to get token again...")
+            self.__get_token()
     
     def get_organizations(self) -> Organizations:
         token = self.__get_token()
@@ -112,7 +124,7 @@ class Zohodesk:
             orgId: Optional[str] = None,
             save_path: Optional[str] = './tickets',
             start_date: str = "",
-            upload: bool = False,
+            upload: bool = True,
     ) -> None | pathlib.Path:
         # getting the token
         token = self.__get_token()
@@ -183,34 +195,12 @@ class Zohodesk:
         saved_tickets_path = pathlib.Path("./tickets").absolute()
 
         if upload:
-            self.__send_data_to_s3(
+            eval(send_data_to_s3(
                 saved_tickets_path,
                 domain="tickets"
-            )
+            ))
         else:
             return pathlib.Path("./tickets").absolute()
-    
-    def __send_data_to_s3(
-            self, 
-            path: pathlib.Path,
-            domain: str
-    ) -> None:
-        calls = {
-            "tickets": "self.get_tickets(upload=True)",
-            "contacts": "self.get_contacts(upload=True)",
-            "tasks": "self.get_contacts(upload=True)",
-        }
-
-        for file in path.iterdir():
-            upload_to_s3(
-                filename=file,
-                bucket="501464632998-prod-landing-corporate",
-                key=f"zohodesk/{domain}/{file.name}"
-            )
-
-            pathlib.Path(file).unlink()
-        
-        eval(calls.get(domain))
     
     def get_departments(self) -> None:
         token = self.__get_token()
@@ -247,7 +237,7 @@ class Zohodesk:
             orgId: Optional[str] = None,
             save_path: Optional[str] = './tasks',
             start_date: str = "",
-            upload: bool = False,
+            upload: bool = True,
     ) -> None:
         token = self.__get_token()
 
@@ -317,7 +307,7 @@ class Zohodesk:
         saved_tasks_path = pathlib.Path("./tasks").absolute()
 
         if upload:
-            self.__send_data_to_s3(
+            send_data_to_s3(
                 saved_tasks_path,
                 domain="tasks"
             )
@@ -329,7 +319,7 @@ class Zohodesk:
             orgId: Optional[str] = None,
             save_path: Optional[str] = './contacts',
             start_date: str = "",
-            upload: bool = False,
+            upload: bool = True,
     ) -> None | pathlib.Path:
         token = self.__get_token()
 
@@ -399,7 +389,7 @@ class Zohodesk:
         saved_contacts_path = pathlib.Path("./contacts").absolute()
 
         if upload:
-            self.__send_data_to_s3(
+            send_data_to_s3(
                 saved_contacts_path,
                 domain="contacts"
             )
