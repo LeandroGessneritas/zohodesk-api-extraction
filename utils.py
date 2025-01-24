@@ -108,7 +108,7 @@ def send_data_to_s3(
     calls = {
         "tickets": "self.get_tickets()",
         "contacts": "self.get_contacts()",
-        "tasks": "self.get_contacts()",
+        "tasks": "self.get_tasks()",
     }
 
     s3_client = boto3.client(

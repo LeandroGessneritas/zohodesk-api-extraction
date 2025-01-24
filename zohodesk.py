@@ -300,6 +300,7 @@ class Zohodesk:
                     log_event=False
                 )
             elif response.status_code == 204:
+                upload = False
                 break
             else:
                 pass
@@ -307,10 +308,10 @@ class Zohodesk:
         saved_tasks_path = pathlib.Path("./tasks").absolute()
 
         if upload:
-            send_data_to_s3(
+            eval(send_data_to_s3(
                 saved_tasks_path,
                 domain="tasks"
-            )
+            ))
         else:
             return pathlib.Path("./tasks").absolute()
     
@@ -382,6 +383,7 @@ class Zohodesk:
                     log_event=False
                 )
             elif response.status_code == 204:
+                upload = False
                 break
             else:
                 pass
@@ -389,9 +391,9 @@ class Zohodesk:
         saved_contacts_path = pathlib.Path("./contacts").absolute()
 
         if upload:
-            send_data_to_s3(
+            eval(send_data_to_s3(
                 saved_contacts_path,
                 domain="contacts"
-            )
+            ))
         else:
             return pathlib.Path("./contacts").absolute()
