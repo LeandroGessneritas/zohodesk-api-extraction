@@ -418,7 +418,3 @@ class Zohodesk:
             ))
         else:
             return pathlib.Path("./contacts").absolute()
-        
-
-
-        
