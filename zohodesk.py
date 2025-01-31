@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 import requests as req
-from time import sleep
+# from time import sleep
 import logging
 import pathlib
 import json
@@ -73,7 +73,10 @@ class Zohodesk:
         logging.warning("DONE.")
 
     def __get_refresh_token(self) -> str:
-        if "refresh_token.json" not in os.listdir(os.getcwd()):
+        if (
+                "refresh_token.json" not in os.listdir(os.getcwd())
+                or self.code is not None
+        ):
             self.__generate_refresh_token()
         
         with open("refresh_token.json", "r") as file:
@@ -95,11 +98,15 @@ class Zohodesk:
         try:
             return json.loads(resp.content)['access_token']
         except KeyError:
-            # if 'error' in list(json.loads(resp.content).keys()):
-            logging.warning("Waiting 30 seconds to do a request to another endpoint...")
-            sleep(30)
-            logging.warning("Trying to get token again...")
-            self.__get_token()
+            error_description = json.loads(resp.content)['error_description']
+            logging.info(error_description)
+
+            sys.exit()
+
+            # logging.warning("Waiting 30 seconds to do a request to another endpoint...")
+            # sleep(30)
+            # logging.warning("Trying to get token again...")
+            # self.__get_token()
     
     def get_organizations(self) -> Organizations:
         token = self.__get_token()
