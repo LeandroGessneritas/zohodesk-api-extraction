@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 import requests as req
-# from time import sleep
 import logging
 import pathlib
 import json
@@ -73,10 +72,29 @@ class Zohodesk:
         logging.warning("DONE.")
 
     def __get_refresh_token(self) -> str:
-        if (
-                "refresh_token.json" not in os.listdir(os.getcwd())
-                or self.code is not None
-        ):
+        if self.code is not None:
+            try:
+                last_code = ""
+
+                with open("last_code.json", "r") as file:
+                    last_code = json.load(file)['last_code']
+                
+                if last_code != self.code:
+                    write_json_file(
+                        "last_code",
+                        {"last_code": self.code}
+                    )
+
+                    self.__generate_refresh_token()
+                else:
+                    pass
+            except FileNotFoundError:
+                write_json_file(
+                    "last_code",
+                    {"last_code": self.code}
+                )
+
+        if "refresh_token.json" not in os.listdir(os.getcwd()):
             self.__generate_refresh_token()
         
         with open("refresh_token.json", "r") as file:
@@ -96,17 +114,13 @@ class Zohodesk:
         )
 
         try:
+            # try to return the token that is valid for more than one hour
             return json.loads(resp.content)['access_token']
         except KeyError:
+            # print the error message and terminate the script running
             error_description = json.loads(resp.content)['error_description']
             logging.info(error_description)
-
             sys.exit()
-
-            # logging.warning("Waiting 30 seconds to do a request to another endpoint...")
-            # sleep(30)
-            # logging.warning("Trying to get token again...")
-            # self.__get_token()
     
     def get_organizations(self) -> Organizations:
         token = self.__get_token()
