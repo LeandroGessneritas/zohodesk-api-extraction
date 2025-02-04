@@ -1,3 +1,4 @@
+from typing import Optional
 import pathlib
 import logging
 import boto3
@@ -28,14 +29,44 @@ def write_json_file(
             logging.info(f"File {p}/{file_name}.json saved!")
 
 
-def read_json_file(path: str | pathlib.Path):
-    obj = []
+def read_json_file(path: str | pathlib.Path) -> dict:
+    obj = {}
 
     with open(path, "r", encoding='latin-1') as json_file:
         obj = json.load(json_file)
     
     return obj
 
+
+def get_infos(key: Optional[str] = None) -> str | dict:
+    path = pathlib.Path("infos.json").absolute()
+
+    obj = {}
+
+    with open(path, "r", encoding='latin-1') as json_file:
+        obj = json.load(json_file)
+
+    if key is None:
+        return obj
+    else:
+        try:
+            return obj[key]
+        except KeyError:
+            return None
+
+
+def update_infos(
+        key: str,
+        value: str
+) -> None:
+    path = pathlib.Path("infos.json").absolute()
+
+    obj = get_infos()
+    obj[key] = value
+
+    with open(path, mode="w+", encoding="latin-1") as file:
+        json.dump(obj, fp=file, indent=4)
+        
 
 def __flat_json_object(obj: list | dict):
     json_file_flat = []
@@ -101,16 +132,12 @@ def normalize_json_file(
     
     return pathlib.Path(save_path)
 
+
 def send_data_to_s3(
         path: pathlib.Path,
-        domain: str
+        bucket: str,
+        key: str
 ) -> None:
-    calls = {
-        "tickets": "self.get_tickets()",
-        "contacts": "self.get_contacts()",
-        "tasks": "self.get_tasks()",
-    }
-
     s3_client = boto3.client(
         "s3",
         aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
@@ -119,19 +146,23 @@ def send_data_to_s3(
     )
 
     if path.is_dir():
+        logging.info(f"\nSending the data from '{path}' to AWS S3 '{bucket}/{key}'")
+
         for file in path.iterdir():
             s3_client.upload_file(
                 Filename=file,
-                Bucket="501464632998-prod-landing-corporate",
-                Key=f"zohodesk/{domain}/{file.name}"
+                Bucket=bucket,
+                Key=f"{key}/{file.name}"
             )
 
             pathlib.Path(file).unlink()
+        
+        pathlib.Path(path).rmdir()
+
+        logging.info("Sending data is finished!\n")
     else:
         # TODO: 
         pass
-    
-    return calls.get(domain)
 
 
 def __get_int(n):

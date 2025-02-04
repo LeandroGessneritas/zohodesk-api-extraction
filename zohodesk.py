@@ -1,11 +1,13 @@
 from utils import (
     write_json_file, 
     read_json_file, 
-    send_data_to_s3
+    send_data_to_s3,
+    get_infos,
+    update_infos
 )
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Literal
 import requests as req
 import logging
 import pathlib
@@ -27,7 +29,7 @@ class Organizations:
 class Zohodesk:
     def __init__(
             self,
-            code: str | None = None
+            code: Optional[str] = None,
     ) -> None:
         self.base_url: str = "https://desk.zoho.com/api/v1"
         self.token_url: str = "https://accounts.zoho.com/oauth/v2/token"
@@ -64,41 +66,26 @@ class Zohodesk:
         if "error" in f"{json_response}":
             raise Exception("The provided code is invalid. Generate a new one in the API Console Portal.")
 
-        write_json_file(
-            file_name="refresh_token",
-            data={"refresh_token": json_response.get("refresh_token")}
-        )
+        update_infos(key="refresh_token", value=json_response.get("refresh_token"))
 
         logging.warning("DONE.")
 
     def __get_refresh_token(self) -> str:
         if self.code is not None:
-            try:
-                last_code = ""
-
-                with open("last_code.json", "r") as file:
-                    last_code = json.load(file)['last_code']
-                
-                if last_code != self.code:
-                    write_json_file(
-                        "last_code",
-                        {"last_code": self.code}
-                    )
-
-                    self.__generate_refresh_token()
-                else:
-                    pass
-            except FileNotFoundError:
-                write_json_file(
-                    "last_code",
-                    {"last_code": self.code}
+            last_code = get_infos(key="last_api_code")
+            
+            if last_code != self.code:
+                update_infos(
+                    key="last_api_code",
+                    value=self.code
                 )
+                
+                self.__generate_refresh_token()
 
-        if "refresh_token.json" not in os.listdir(os.getcwd()):
+        if "refresh_token" not in list(get_infos().keys()):
             self.__generate_refresh_token()
         
-        with open("refresh_token.json", "r") as file:
-            return json.load(file)['refresh_token']
+        return get_infos("refresh_token")
     
     def __get_token(self) -> str:
         refresh_token: str = self.__get_refresh_token()
@@ -113,13 +100,16 @@ class Zohodesk:
             }
         )
 
+        content: dict = json.loads(resp.content)
+
         try:
             # try to return the token that is valid for more than one hour
-            return json.loads(resp.content)['access_token']
+            return content['access_token']
         except KeyError:
             # print the error message and terminate the script running
-            error_description = json.loads(resp.content)['error_description']
-            logging.info(error_description)
+            error_list_keys = list(content.keys())
+            error_message = content.get('error_description') if "error_description" in error_list_keys else content.get('error')
+            logging.info(error_message)
             sys.exit()
     
     def get_organizations(self) -> Organizations:
@@ -216,10 +206,14 @@ class Zohodesk:
         saved_tickets_path = pathlib.Path("./tickets").absolute()
 
         if upload:
-            eval(send_data_to_s3(
+            send_data_to_s3(
                 saved_tickets_path,
-                domain="tickets"
-            ))
+                bucket="501464632998-prod-landing-corporate",
+                key="zohodesk/tickets"
+            )
+
+            if response.status_code == 204:
+                sys.exit()
         else:
             return pathlib.Path("./tickets").absolute()
     
@@ -321,7 +315,6 @@ class Zohodesk:
                     log_event=False
                 )
             elif response.status_code == 204:
-                upload = False
                 break
             else:
                 pass
@@ -329,24 +322,31 @@ class Zohodesk:
         saved_tasks_path = pathlib.Path("./tasks").absolute()
 
         if upload:
-            eval(send_data_to_s3(
+            send_data_to_s3(
                 saved_tasks_path,
-                domain="tasks"
-            ))
+                bucket="501464632998-prod-landing-corporate",
+                key="zohodesk/tasks"
+            )
+
+            if response.status_code == 204:
+                sys.exit()
         else:
             return pathlib.Path("./tasks").absolute()
     
     def get_contacts(
             self,
             orgId: Optional[str] = None,
-            save_path: Optional[str] = './contacts',
+            domain: Optional[str] = None,
             start_date: str = "",
             upload: bool = True,
     ) -> None | pathlib.Path:
         token = self.__get_token()
 
         if orgId is None:
-            orgId = self.__org_id 
+            orgId = self.__org_id
+        
+        if domain is None:
+            domain = "contacts"
 
         if start_date != "":
             # validating the date passed as parameter
@@ -354,15 +354,15 @@ class Zohodesk:
 
             if bool(valid_date) is False:
                 raise ValueError(
-                    """Valid date is required to get only updated tickets.
-                    Expected format is yyyy-MM-dd'T'HH:mm:ss.SSS'Z' wihtout the quotes."""
+                    """Invalid date!. Expected format is 
+                    yyyy-MM-dd'T'HH:mm:ss.SSS'Z' wihtout the quotes."""
                 )
         else:
             # veryfing if already exist downloaded tickets
             try:
-                file: dict = read_json_file(path=pathlib.Path("last_contact.json").absolute())
+                file: dict = read_json_file(path=pathlib.Path(f"last_{domain}.json").absolute())
 
-                start_date = file.get("last_contact_downloaded_date")
+                start_date = file.get(f"last_{domain}_downloaded_date")
             except FileNotFoundError:
                 start_date = "2018-01-01T00:00:00.000Z"
         
@@ -374,7 +374,7 @@ class Zohodesk:
         endpoint: str = "contacts"
         start: int = 0
 
-        for num in range(start, start + 5_000, 100):
+        for num in range(start, start + 10_000, 100):
             response = req.get(
                 url=f"{self.base_url}/{endpoint}/{parameter}&from={num}&limit=100&sortBy={sort_by}",
                 headers={
@@ -393,28 +393,103 @@ class Zohodesk:
                 final_replaces: str = final.replace(':', '-').replace('T', '_').replace('.000Z', '')
 
                 write_json_file(
-                    path=save_path,
-                    file_name=f"contacts_from_{init_replaces}_to_{final_replaces}",
+                    path=f"./{domain}",
+                    file_name=f"{domain}_from_{init_replaces}_to_{final_replaces}",
                     data=data
                 )
 
                 write_json_file(
-                    file_name="last_contact",
-                    data={"last_contact_downloaded_date": f"{final}"},
+                    file_name=f"last_{domain}",
+                    data={
+                        f"last_{domain}_downloaded_date": f"{final}"
+                    },
                     log_event=False
                 )
             elif response.status_code == 204:
-                upload = False
                 break
             else:
                 pass
         
-        saved_contacts_path = pathlib.Path("./contacts").absolute()
+        saved_files_path = pathlib.Path(f"./{domain}").absolute()
 
         if upload:
-            eval(send_data_to_s3(
-                saved_contacts_path,
-                domain="contacts"
-            ))
+            send_data_to_s3(
+                saved_files_path,
+                bucket="501464632998-prod-landing-corporate",
+                key=f"zohodesk/{domain}"
+            )
+
+            if response.status_code == 204:
+                sys.exit()
         else:
-            return pathlib.Path("./contacts").absolute()
+            return saved_files_path
+
+    def get_api_data(
+            self,
+            domain: Literal["contacts", "tasks", "tickets"],
+            orgId: Optional[str] = None,
+            upload: Optional[bool] = True,
+            from_beggining: Optional[bool] = False
+    ) -> None | pathlib.Path:
+        token = self.__get_token()
+        orgId = self.__org_id if orgId is None else orgId
+
+        start_date = get_infos(f"{domain}_last_downloaded_date")
+
+        if from_beggining or start_date is None:
+            start_date = "2015-01-01T00:00:00.000Z"
+        
+        today = datetime.today()
+        full_last_hour_today = f"{today.year}-{today.month:0>2}-{today.day:0>2}T23:59:59.999Z"
+
+        parameter: str = f"search?modifiedTimeRange={start_date},{full_last_hour_today}&"
+        sort_by: str = "modifiedTime"
+        endpoint: str = "contacts"
+        num: int = 0
+
+        while True:
+            response = req.get(
+                url=f"{self.base_url}/{endpoint}/{parameter}from=0&limit=100&sortBy={sort_by}",
+                headers={
+                    "Authorization": f"Zoho-oauthtoken {token}",
+                    "orgId": orgId
+                }
+            )
+
+            if response.status_code == 200:
+                data = json.loads(response.content)['data']
+
+                init: str = data[0]["modifiedTime"]
+                final: str = data[-1]["modifiedTime"]
+                
+                init_replaces: str = init.replace(':', '-').replace('T', '_').replace('.000Z', '')
+                final_replaces: str = final.replace(':', '-').replace('T', '_').replace('.000Z', '')
+
+                write_json_file(
+                    path=f"./{domain}",
+                    file_name=f"{domain}_from_{init_replaces}__to__{final_replaces}",
+                    data=data
+                )
+
+                update_infos(key=f"{domain}_last_downloaded_date", value=f"{final}")
+            elif response.status_code == 204:
+                if upload:
+                    send_data_to_s3(
+                        pathlib.Path(f"./{domain}").absolute(),
+                        bucket="501464632998-prod-landing-corporate",
+                        key=f"zohodesk/{domain}"
+                    )
+                
+                break
+
+            num += 100
+            parameter: str = f"search?modifiedTimeRange={final},{full_last_hour_today}&"
+
+            if num == 5_000 and upload:
+                send_data_to_s3(
+                    pathlib.Path(f"./{domain}").absolute(),
+                    bucket="501464632998-prod-landing-corporate",
+                    key=f"zohodesk/{domain}"
+                )
+
+                num = 0
