@@ -160,9 +160,17 @@ def send_data_to_s3(
         pathlib.Path(path).rmdir()
 
         logging.info("Sending data is finished!\n")
+    elif path.is_file():  # Adicionando suporte para arquivo único
+        s3_client.upload_file(
+            Filename=str(path),
+            Bucket="501464632998-prod-landing-corporate",
+            Key=f"zohodesk/{domain}/{path.name}"
+        )
+        path.unlink()  # Remove o arquivo local após o envio
     else:
-        # TODO: 
-        pass
+        logging.error(f"Path {path} não é válido.")
+    
+    return calls.get(domain)
 
 
 def __get_int(n):
