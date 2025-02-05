@@ -14,6 +14,9 @@ import sys
 import os
 import re
 
+import pandas as pd
+import s3fs
+
 
 logging.basicConfig(level=logging.INFO)
 
@@ -418,3 +421,85 @@ class Zohodesk:
             ))
         else:
             return pathlib.Path("./contacts").absolute()
+
+
+
+
+
+    def get_ticket_history(self, ticket_id: str):
+        token = self.__get_token()
+        response = req.get(
+            url=f"{self.base_url}/tickets/{ticket_id}/History",
+            headers={
+                "Authorization": f"Zoho-oauthtoken {token}",
+                "orgId": self.__org_id
+            }
+        )
+
+        if response.status_code == 200:
+            try:
+                history_data = json.loads(response.content)
+                logging.info(f"Successfully fetched history for ticket {ticket_id}.")
+                return history_data
+            except json.JSONDecodeError as e:
+                logging.error(f"Failed to decode JSON response for ticket {ticket_id}: {e}")
+                return None
+        else:
+            logging.error(f"Failed to fetch history for ticket {ticket_id}. Status Code: {response.status_code}")
+            return None
+
+
+    def get_ticket_ids_from_parquet(self, bucket: str, prefix: str):
+        s3_path = f"s3://{bucket}/{prefix}year=*/month=*/day=*/"
+        fs = s3fs.S3FileSystem()
+
+        parquet_files = fs.glob(f"{s3_path}*.parquet")
+
+        if not parquet_files:
+            logging.error("Nenhum arquivo Parquet encontrado no S3.")
+            return []
+
+        '''
+        df = pd.read_parquet(fs.open(parquet_files[0], 'rb'), engine='fastparquet')
+        pd.set_option('display.max_rows', None)
+        pd.set_option('display.max_columns', None)
+        pd.set_option('display.width', None)
+        pd.set_option('display.max_colwidth', None)
+        print("**************** START SCHEMA ****************")
+        print(df.dtypes)
+        print("**************** END SCHEMA ****************")
+        sys.exit()
+        '''
+
+        ticket_ids = []
+        for file in parquet_files:
+            df = pd.read_parquet(fs.open(file, 'rb'), engine='fastparquet')
+            if 'id' in df.columns:
+                ticket_ids.extend(df['id'].tolist())
+
+        return ticket_ids
+
+
+    def process_ticket_histories(self):
+        bucket = "501464632998-prod-trusted-corporate"
+        prefix = "zohodesk/tickets/"
+
+        ticket_ids = self.get_ticket_ids_from_parquet(bucket, prefix)
+        
+        save_path = pathlib.Path("./ticket_histories")
+        save_path.mkdir(exist_ok=True)
+
+        for ticket_id in ticket_ids:
+            history = self.get_ticket_history(ticket_id)
+
+            if history:
+                print(f"Gravando arquivo localmente: {save_path} para S3...")
+                write_json_file(
+                    file_name=f"ticket_{ticket_id}_history",
+                    data=history,
+                    path=save_path
+                )
+                file_path = save_path / f"ticket_{ticket_id}_history.json"
+                if file_path.exists():
+                    print(f"Enviando arquivo: {file_path} para S3...")
+                    send_data_to_s3(path=file_path, domain="ticket_histories")

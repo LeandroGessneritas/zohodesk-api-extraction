@@ -1,3 +1,8 @@
 boto3
 python-dotenv
 requests==2.32.3
+
+pandas
+s3fs
+fastparquet
+numpy<2
